@@ -10,7 +10,8 @@ let resolution;
 let scaleFactor;
 let tMax;
 let mode;
-let debug;
+let debug0;
+let debug1;
 
 let t;
 
@@ -29,8 +30,9 @@ function setup() {
   resolution = 100;
   scaleFactor = 1.0;
   tMax = TWO_PI;
-  debug = false;
   mode = "STOP";
+  debug0 = false;
+  debug1 = false;
 
   t = 0;
 }
@@ -56,9 +58,9 @@ function draw() {
         exprX = exprX.replace('T', '(' + time + ')');
         exprY = exprY.replace('T', '(' + time + ')');
       }
-      return [eval(exprX), eval(exprY)];
+      return createVector(eval(exprX), eval(exprY));
     } catch {
-      return [0, 0];
+      return createVector(0, 0);
     }
   }
 
@@ -67,8 +69,11 @@ function draw() {
   drawCurve(t => p(t), 0, tMax*t, resolution);
   pop();
 
-  if (debug) {
-    data(p, tMax*t);
+  if (debug0) {
+    dataVAC(p, tMax*t);
+  }
+  if (debug1) {
+    dataAf(p, tMax*t);
   }
 
   switch (mode) {
@@ -102,12 +107,12 @@ function coSys(time) {
   line(-width/2, 0, width/2, 0);
 }
 
-function data(func, time) {
+function dataVAC(func, time) {
   push();
   let endP = func(time);
 
   scale(100*scaleFactor, -100*scaleFactor);
-  translate(endP[0], endP[1]);
+  translate(endP.x, endP.y);
 
   let vB = D(func);
   let aB = D(vB);
@@ -116,23 +121,24 @@ function data(func, time) {
   let aBt = aB(time)
 
   let mat = [vBt, aBt];
-  let _vBt_ = len(vBt);
+  let _vBt_ = vBt.mag();
   let curvatureInv = (_vBt_*_vBt_*_vBt_) / det(mat);
-  let dir = [-vBt[1]/sqrt(sq(vBt[0]) + sq(vBt[1])), vBt[0]/sqrt(sq(vBt[0]) + sq(vBt[1]))];
+  let dir = createVector(-vBt.y/vBt.mag(), vBt.x/vBt.mag());
 
   strokeWeight(1/(100*scaleFactor));
   circle(0, 0, 0.05*scaleFactor, 0.05*scaleFactor);
 
   stroke(0, 255, 0);
-  circle(curvatureInv*dir[0], curvatureInv*dir[1], 2*curvatureInv);
+  circle(curvatureInv*dir.x, curvatureInv*dir.y, 2*curvatureInv);
 
   stroke(255, 0, 0);
-  line(0, 0, 0.5*vBt[0], 0.5*vBt[1]);
+  line(0, 0, vBt.x, vBt.y);
   stroke(0, 0, 255);
-  line(0, 0, 0.5*aBt[0], 0.5*aBt[1]);
+  line(0, 0, aBt.x, aBt.y);
   pop();
+}
 
-
+function dataAf(func, time) {
   push();
   translate(width/2 - 90, height/2 - 90);
 
@@ -140,35 +146,30 @@ function data(func, time) {
   circle(0, 0, 150);
   circle(0, 0, 2);
 
-  let vBU = function(t0) {
-    let vTemp = vB(t0);
-    return mult(vTemp, 1/len(vTemp));
+  let alpha = function(f0, t0) {
+    let vBUt0 = D(f0)(t0).normalize();
+    let xP = lerp(0, 75*vBUt0.x, t0/tMax);
+    let yP = lerp(0, -75*vBUt0.y, t0/tMax);
+
+    return createVector(xP, yP);
   }
 
-  let alpha = function(t0) {
-    let vBUt0 = vBU(t0);
-    let xP = lerp(0, 75*vBUt0[0], t0/tMax);
-    let yP = lerp(0, -75*vBUt0[1], t0/tMax);
-
-    return [xP, yP];
-  }
-
-  let vBUt = vBU(time);
-  let a = alpha(time);
+  let vBUt = D(func)(time).normalize();
+  let a = alpha(func, time);
 
   stroke(255, 0, 0);
-  line(0, 0, 75*vBUt[0], -75*vBUt[1]);
-  drawCurve(t => alpha(t), 0, time);
+  line(0, 0, 75*vBUt.x, -75*vBUt.y);
+  drawCurve(t => alpha(func, t), 0, time);
 
   stroke(255);
-  circle(a[0], a[1], 2);
+  circle(a.x, a.y, 2);
   pop();
 }
 
 function segments(points) {
   beginShape();
   for (pt of points) {
-    vertex(pt[0], pt[1]);
+    vertex(pt.x, pt.y);
   }
   endShape();
 }
@@ -185,19 +186,21 @@ var Settings = function() {
   this.mScaleFactor = scaleFactor;
   this.mTMax = tMax;
   this.mMode = mode;
-  this.mDebug = debug;
+  this.mDebug0 = debug0;
+  this.mDebug1 = debug1;
 };
 
 window.onload = function() {
   options = new Settings();
-  gui = new dat.GUI();
+  gui = new dat.GUI({width: 400});
 
   gui.add(options, 'mSpeed', 0.0, 2.0).step(0.01).name('Speed').onChange(function(value) {speed = value});
   gui.add(options, 'mResolution', 100, 500).name('Resolution').onChange(function(value) {resolution = round(value)});
   gui.add(options, 'mScaleFactor', 0.1, 2).name('Scalefactor').onChange(function(value) {scaleFactor = value});
   gui.add(options, 'mTMax', 1, 6*PI).step(0.01).name('Timespan').onChange(function(value) {tMax = value});
   gui.add(options, 'mMode', { Loop: "LOOP", Toggle: "TOGGLE", Stop: "STOP"}).name('Mode').onChange(function(value) {mode = value});
-  gui.add(options, 'mDebug').name('Debug').onChange(function(value) {debug = value});
+  gui.add(options, 'mDebug0').name('Show Vectors/Curvature').onChange(function(value) {debug0 = value});
+  gui.add(options, 'mDebug1').name('Show Anglefunction').onChange(function(value) {debug1 = value});
 };
 
 ////////////////////////////////////////////
@@ -309,21 +312,17 @@ function latexToMathjs(term) {
 function D(f) {
   let h = 0.00001;
   dF = function (x) {
-    let x1 = (f(x+h)[0] - f(x)[0])/h;
-    let x2 = (f(x+h)[1] - f(x)[1])/h;
+    let x1 = (f(x+h).x - f(x).x)/h;
+    let x2 = (f(x+h).y - f(x).y)/h;
 
-    return [x1, x2];
+    return createVector(x1, x2);
   }
 
   return dF;
 }
 
 function det(M) {
-  return M[0][0]*M[1][1] - M[0][1]*M[1][0];
-}
-
-function mult(v, c) {
-  return [v[0]*c, v[1]*c];
+  return M[0].x*M[1].y - M[0].y*M[1].x;
 }
 
 function len(v) {
