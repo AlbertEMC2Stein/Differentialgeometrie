@@ -1,4 +1,4 @@
-# Differentialgeometrie
+# Kurvenanimation
 Anwendung für planare Kurven.
 
 
